@@ -28,25 +28,22 @@ def init():
 
 init()
 
-# ================= MODELS =================
-class CreateKey(BaseModel):
+# ================= MODELOS =================
+class Create(BaseModel):
     days: int = 0
 
-class ValidateKey(BaseModel):
+class Validate(BaseModel):
     key: str
     hwid: str
-
-class BlockKey(BaseModel):
-    key: str
 
 # ================= HOME =================
 @app.get("/")
 def home():
-    return {"status": "SAAS PREMIUM ONLINE 🚀"}
+    return {"status": "SAAS ONLINE 🚀"}
 
 # ================= CREATE KEY =================
 @app.post("/create")
-def create(data: CreateKey):
+def create(data: Create):
     key = str(uuid.uuid4())
 
     expires = None
@@ -68,7 +65,7 @@ def create(data: CreateKey):
 
 # ================= VALIDATE =================
 @app.post("/validate")
-def validate(data: ValidateKey):
+def validate(data: Validate):
     conn = db()
     c = conn.cursor()
 
@@ -78,7 +75,7 @@ def validate(data: ValidateKey):
     if not row:
         return {"status": "invalid"}
 
-    hwid, expires, active = row
+    hwid_db, expires, active = row
 
     if active == 0:
         return {"status": "blocked"}
@@ -86,20 +83,17 @@ def validate(data: ValidateKey):
     if expires and datetime.utcnow() > datetime.fromisoformat(expires):
         return {"status": "expired"}
 
-    if hwid == "" or hwid == data.hwid:
+    # 🔒 TRAVA NO PRIMEIRO PC
+    if hwid_db == "":
         c.execute("UPDATE licenses SET hwid=? WHERE key=?", (data.hwid, data.key))
         conn.commit()
+        conn.close()
         return {"status": "ok"}
 
-    return {"status": "wrong_device"}
+    # ❌ OUTRO PC
+    if hwid_db != data.hwid:
+        conn.close()
+        return {"status": "wrong_device"}
 
-# ================= BLOCK =================
-@app.post("/block")
-def block(data: BlockKey):
-    conn = db()
-    c = conn.cursor()
-
-    c.execute("UPDATE licenses SET active=0 WHERE key=?", (data.key,))
-    conn.commit()
-
-    return {"status": "blocked"}
+    conn.close()
+    return {"status": "ok"}
